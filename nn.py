@@ -36,8 +36,9 @@ model = SimpleNN()
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-def train(model, device, train_loader, optimizer, criterion):
+def train(model, device, train_loader, optimizer, criterion, epoch, log_interval=100):
     model.train()
+    running_loss = 0.0
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
         optimizer.zero_grad()
@@ -45,8 +46,11 @@ def train(model, device, train_loader, optimizer, criterion):
         loss = criterion(output, target)
         loss.backward()
         optimizer.step()
-        if batch_idx % 100 == 0:
-            print(f'Train Batch: {batch_idx} \tLoss: {loss.item():.6f}')
+        running_loss += loss.item()
+        if batch_idx % log_interval == 0:
+            print(f'Epoch: {epoch} [{batch_idx*len(data)}/{len(train_loader.dataset)}]\tLoss: {loss.item():.6f}')
+    avg_loss = running_loss / len(train_loader)
+    print(f'Average Training Loss: {avg_loss:.4f}')
 
 def test(model, device, test_loader, criterion):
     model.eval()
@@ -62,12 +66,18 @@ def test(model, device, test_loader, criterion):
     test_loss /= len(test_loader)
     accuracy = correct / len(test_loader.dataset)
     print(f'Test Loss: {test_loss:.4f}, Accuracy: {accuracy*100:.2f}%')
+    return test_loss, accuracy
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
+best_accuracy = 0.0
 epochs = 5
 for epoch in range(1, epochs + 1):
-    print(f'Epoch {epoch}:')
-    train(model, device, train_loader, optimizer, criterion)
-    test(model, device, test_loader, criterion)
+    print(f'\nEpoch {epoch}:')
+    train(model, device, train_loader, optimizer, criterion, epoch)
+    test_loss, accuracy = test(model, device, test_loader, criterion)
+    if accuracy > best_accuracy:
+        best_accuracy = accuracy
+        torch.save(model.state_dict(), 'best_model.pth')
+        print(f'New best model saved with accuracy: {best_accuracy*100:.2f}%')
